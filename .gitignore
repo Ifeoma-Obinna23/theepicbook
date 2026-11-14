@@ -1,2 +1,12 @@
 node_modules
 .DS_Store
+
+# Secrets, keys and Ansible temp files
+*.pem
+*.key
+*_rsa
+id_rsa*
+id_ed25519*
+*.retry
+.env
+ansible/**/secrets*.yml
