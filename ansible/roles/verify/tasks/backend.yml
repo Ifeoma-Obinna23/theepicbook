@@ -1,0 +1,32 @@
+---
+- name: Check the EpicBook service is active
+  ansible.builtin.command: systemctl is-active epicbook
+  register: app_status
+  changed_when: false
+
+- name: Check EpicBook is listening on its port
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: "{{ backend_app_port }}"
+    timeout: 60
+
+- name: Count authors in MySQL
+  ansible.builtin.command:
+    argv: [mysql, "--defaults-extra-file={{ mysql_client_cnf }}", -N, -B, -e,
+           "SELECT COUNT(*) FROM {{ mysql_database }}.Author"]
+  register: authors
+  changed_when: false
+
+- name: Count books in MySQL
+  ansible.builtin.command:
+    argv: [mysql, "--defaults-extra-file={{ mysql_client_cnf }}", -N, -B, -e,
+           "SELECT COUNT(*) FROM {{ mysql_database }}.Book"]
+  register: books
+  changed_when: false
+
+- name: Assert the tables contain seed data
+  ansible.builtin.assert:
+    that:
+      - authors.stdout | int > 0
+      - books.stdout | int > 0
+    success_msg: "Service {{ app_status.stdout }}; port {{ backend_app_port }} listening; {{ authors.stdout }} authors and {{ books.stdout }} books in MySQL"

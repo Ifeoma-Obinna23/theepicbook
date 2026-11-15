@@ -1,0 +1,18 @@
+---
+- name: Check Nginx is active
+  ansible.builtin.command: systemctl is-active nginx
+  changed_when: false
+
+- name: Check the Nginx configuration is valid
+  ansible.builtin.command: nginx -t
+  changed_when: false
+
+- name: Request EpicBook through Nginx on the frontend
+  ansible.builtin.uri:
+    url: http://localhost/
+    status_code: 200
+  register: local_check
+
+- name: Show the frontend result
+  ansible.builtin.debug:
+    msg: "Nginx on the frontend returned HTTP {{ local_check.status }} via backend {{ backend_private_ip }}:{{ backend_app_port }}"

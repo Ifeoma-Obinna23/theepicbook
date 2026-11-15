@@ -1,0 +1,131 @@
+# Application Pipeline: Ansible deployment of EpicBook
+trigger:
+  branches:
+    include:
+      - main
+  paths:
+    exclude:
+      - README.md
+      - 'Installation & Configuration Guide.md'
+
+pool:
+  name: SelfHostedPool
+
+variables:
+  - group: epicbook-db-secrets
+  - name: ansibleDir
+    value: '$(System.DefaultWorkingDirectory)/ansible'
+
+stages:
+  # ---------- Stage 1: Prepare ----------
+  - stage: Prepare
+    displayName: Prepare
+    jobs:
+      - job: Prepare
+        steps:
+          - checkout: self
+            clean: true
+          - template: pipelines/templates/ansible-setup.yml
+          - script: |
+              set -e
+              python3 --version
+              ansible --version | head -1
+              test -s "$(sshKey.secureFilePath)"
+              echo "SSH key is available at a temporary job path (contents not shown)"
+              echo "No extra Ansible collections are needed: the playbooks use only ansible.builtin modules"
+            displayName: Verify Python, Ansible and key
+
+  # ---------- Stage 2: Validate ----------
+  - stage: Validate
+    displayName: Validate
+    dependsOn: Prepare
+    jobs:
+      - job: Validate
+        steps:
+          - checkout: self
+            clean: true
+          - template: pipelines/templates/ansible-setup.yml
+
+          - script: |
+              set -e
+              ansible-inventory --graph
+              ansible-playbook site.yml --syntax-check
+              ansible-playbook verify.yml --syntax-check
+            displayName: Validate inventory and syntax
+            workingDirectory: $(ansibleDir)
+
+          - script: |
+              set -e
+              for key in app_public_ip backend_private_ip mysql_fqdn; do
+                grep -Eq "^${key}: \"[^\"]+\"" group_vars/all/main.yml || { echo "Missing handoff value: $key"; exit 1; }
+                grep -E "^${key}:" group_vars/all/main.yml
+              done
+              echo "All handoff values are present"
+            displayName: Confirm handoff values
+            workingDirectory: $(ansibleDir)
+
+          - script: |
+              if [ -z "$MYSQL_ADMIN_USERNAME" ] || [ -z "$MYSQL_ADMIN_PASSWORD" ] || [[ "$MYSQL_ADMIN_PASSWORD" == '$('* ]]; then
+                echo "##[error]MySQL secret variables are not available"
+                exit 1
+              fi
+              echo "MySQL credentials are available (values hidden)"
+            displayName: Confirm secret variables are available
+            env:
+              MYSQL_ADMIN_USERNAME: $(mysql_admin_username)
+              MYSQL_ADMIN_PASSWORD: $(mysql_admin_password)
+
+          - script: ansible epicbook -m ansible.builtin.ping --private-key "$(sshKey.secureFilePath)"
+            displayName: Test connectivity to frontend and backend
+            workingDirectory: $(ansibleDir)
+
+  # ---------- Stage 3: Configure and Deploy ----------
+  - stage: Deploy
+    displayName: Configure and Deploy
+    dependsOn: Validate
+    jobs:
+      - job: Deploy
+        steps:
+          - checkout: self
+            clean: true
+          - template: pipelines/templates/ansible-setup.yml
+          - script: |
+              set -o pipefail
+              ansible-playbook site.yml \
+                --private-key "$(sshKey.secureFilePath)" \
+                -e "app_version=$(Build.SourceVersion)" | tee "$(Agent.TempDirectory)/deploy.log"
+              if grep -E "(failed|unreachable)=[1-9]" "$(Agent.TempDirectory)/deploy.log"; then
+                echo "##[error]Play recap shows failed or unreachable hosts"
+                exit 1
+              fi
+              echo "Play recap: zero failed and zero unreachable hosts"
+            displayName: Run the main Ansible playbook
+            workingDirectory: $(ansibleDir)
+            env:
+              MYSQL_ADMIN_USERNAME: $(mysql_admin_username)
+              MYSQL_ADMIN_PASSWORD: $(mysql_admin_password)
+
+  # ---------- Stage 4: Verify ----------
+  - stage: Verify
+    displayName: Verify
+    dependsOn: Deploy
+    jobs:
+      - job: Verify
+        steps:
+          - checkout: self
+            clean: true
+          - template: pipelines/templates/ansible-setup.yml
+          - script: |
+              set -o pipefail
+              ansible-playbook verify.yml \
+                --private-key "$(sshKey.secureFilePath)" | tee "$(Agent.TempDirectory)/verify.log"
+              if grep -E "(failed|unreachable)=[1-9]" "$(Agent.TempDirectory)/verify.log"; then
+                echo "##[error]Verification recap shows failed or unreachable hosts"
+                exit 1
+              fi
+              echo "Verification passed: zero failed and zero unreachable hosts"
+            displayName: Verify EpicBook end to end
+            workingDirectory: $(ansibleDir)
+            env:
+              MYSQL_ADMIN_USERNAME: $(mysql_admin_username)
+              MYSQL_ADMIN_PASSWORD: $(mysql_admin_password)

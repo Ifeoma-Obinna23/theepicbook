@@ -1,0 +1,27 @@
+---
+- name: Verify the backend and database
+  hosts: backend
+  become: true
+  roles:
+    - verify
+
+- name: Verify the frontend
+  hosts: frontend
+  become: true
+  roles:
+    - verify
+
+- name: Verify the public endpoint from the pipeline agent
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Request EpicBook through the frontend public IP
+      ansible.builtin.uri:
+        url: "http://{{ app_public_ip }}/"
+        status_code: 200
+      register: public_check
+
+    - name: Show the public endpoint result
+      ansible.builtin.debug:
+        msg: "Frontend http://{{ app_public_ip }}/ returned HTTP {{ public_check.status }}"

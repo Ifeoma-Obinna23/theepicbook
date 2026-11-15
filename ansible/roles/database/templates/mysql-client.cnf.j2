@@ -1,0 +1,7 @@
+# Managed by Ansible - readable by root only (mode 0600)
+[client]
+host={{ mysql_fqdn }}
+port=3306
+user={{ mysql_admin_username }}
+password="{{ mysql_admin_password }}"
+ssl-mode=REQUIRED

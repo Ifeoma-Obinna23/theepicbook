@@ -1,13 +1,22 @@
 ---
-# Handoff from the Infrastructure Pipeline (non-sensitive values only)
-
-# Nginx on the frontend reaches EpicBook through the backend PRIVATE IP,
-# never through the backend's public management address.
+# ---------- Handoff from the Infrastructure Pipeline (non-sensitive) ----------
+app_public_ip: "104.211.26.74"
+# Nginx reaches EpicBook through the backend PRIVATE IP, never its public management IP
 backend_private_ip: "10.20.2.4"
 backend_app_port: 8080
-
-# Azure Database for MySQL (private access only)
 mysql_fqdn: "epicbook-mysql-x6x1b.mysql.database.azure.com"
+mysql_database: "bookstore"
 
-# The MySQL username and password are NOT stored here.
-# They come from the Azure DevOps secret variable group at runtime.
+# ---------- Application settings ----------
+app_repo_url: "https://github.com/Ifeoma-Obinna23/theepicbook.git"
+app_version: "main"          # the pipeline overrides this with the exact commit being deployed
+app_dir: "/opt/epicbook/app"
+app_user: "epicbook"
+node_major: "22"
+mysql_client_cnf: "/etc/epicbook/mysql-client.cnf"
+
+# ---------- Secrets ----------
+# Read at runtime from environment variables that the pipeline maps from the
+# secret variable group. The real values are never stored in this repository.
+mysql_admin_username: "{{ lookup('ansible.builtin.env', 'MYSQL_ADMIN_USERNAME') }}"
+mysql_admin_password: "{{ lookup('ansible.builtin.env', 'MYSQL_ADMIN_PASSWORD') }}"

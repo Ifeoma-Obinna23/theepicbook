@@ -1,0 +1,16 @@
+{
+  "production": {
+    "username": {{ mysql_admin_username | to_json }},
+    "password": {{ mysql_admin_password | to_json }},
+    "database": {{ mysql_database | to_json }},
+    "host": {{ mysql_fqdn | to_json }},
+    "port": 3306,
+    "dialect": "mysql",
+    "logging": false,
+    "dialectOptions": {
+      "ssl": {
+        "rejectUnauthorized": true
+      }
+    }
+  }
+}

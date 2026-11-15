@@ -1,0 +1,74 @@
+---
+- name: Install the MySQL client tools
+  ansible.builtin.apt:
+    name: mysql-client
+    state: present
+
+- name: Confirm the MySQL FQDN resolves inside the VNet
+  ansible.builtin.command: getent hosts {{ mysql_fqdn }}
+  register: mysql_dns
+  changed_when: false
+
+- name: Show the private address MySQL resolves to
+  ansible.builtin.debug:
+    msg: "MySQL resolves to private IP {{ mysql_dns.stdout.split()[0] }}"
+
+- name: Confirm the backend can reach MySQL on port 3306
+  ansible.builtin.wait_for:
+    host: "{{ mysql_fqdn }}"
+    port: 3306
+    timeout: 30
+
+- name: Write the protected MySQL client option file (secret hidden)
+  ansible.builtin.template:
+    src: mysql-client.cnf.j2
+    dest: "{{ mysql_client_cnf }}"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+
+- name: Check whether the database exists
+  ansible.builtin.command:
+    argv: [mysql, "--defaults-extra-file={{ mysql_client_cnf }}", -N, -B, -e,
+           "SELECT COUNT(*) FROM information_schema.schemata WHERE schema_name='{{ mysql_database }}'"]
+  register: db_exists
+  changed_when: false
+
+- name: Create the database if it does not exist
+  ansible.builtin.command:
+    argv: [mysql, "--defaults-extra-file={{ mysql_client_cnf }}", -e,
+           "CREATE DATABASE IF NOT EXISTS {{ mysql_database }}"]
+  when: db_exists.stdout == "0"
+
+- name: Check whether the schema is already imported
+  ansible.builtin.command:
+    argv: [mysql, "--defaults-extra-file={{ mysql_client_cnf }}", -N, -B, -e,
+           "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='{{ mysql_database }}' AND table_name='Author'"]
+  register: schema_exists
+  changed_when: false
+
+- name: Import the EpicBook schema (first run only)
+  ansible.builtin.shell: >
+    mysql --defaults-extra-file={{ mysql_client_cnf }}
+    < {{ app_dir }}/db/BuyTheBook_Schema.sql
+  when: schema_exists.stdout == "0"
+
+- name: Count existing authors
+  ansible.builtin.command:
+    argv: [mysql, "--defaults-extra-file={{ mysql_client_cnf }}", -N, -B, -e,
+           "SELECT COUNT(*) FROM {{ mysql_database }}.Author"]
+  register: author_rows
+  changed_when: false
+
+- name: Import the author seed data (only when empty)
+  ansible.builtin.shell: >
+    mysql --defaults-extra-file={{ mysql_client_cnf }}
+    < {{ app_dir }}/db/author_seed.sql
+  when: author_rows.stdout == "0"
+
+- name: Import the book seed data (only when empty)
+  ansible.builtin.shell: >
+    mysql --defaults-extra-file={{ mysql_client_cnf }}
+    < {{ app_dir }}/db/books_seed.sql
+  when: author_rows.stdout == "0"

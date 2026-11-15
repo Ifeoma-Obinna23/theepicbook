@@ -1,0 +1,26 @@
+---
+- name: Common setup for all EpicBook VMs
+  hosts: epicbook
+  become: true
+  roles:
+    - common
+
+- name: Configure the EpicBook backend and prepare the database
+  hosts: backend
+  become: true
+  roles:
+    - backend
+    - database
+  post_tasks:
+    - name: Ensure EpicBook is enabled and running
+      ansible.builtin.systemd:
+        name: epicbook
+        state: started
+        enabled: true
+        daemon_reload: true
+
+- name: Configure the Nginx frontend
+  hosts: frontend
+  become: true
+  roles:
+    - frontend

@@ -1,0 +1,8 @@
+---
+- name: Run backend checks
+  ansible.builtin.include_tasks: backend.yml
+  when: inventory_hostname in groups['backend']
+
+- name: Run frontend checks
+  ansible.builtin.include_tasks: frontend.yml
+  when: inventory_hostname in groups['frontend']
