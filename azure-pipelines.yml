@@ -53,7 +53,11 @@ stages:
               ansible-playbook verify.yml --syntax-check
             displayName: Validate inventory and syntax
             workingDirectory: $(ansibleDir)
-
+             # DRILL ONLY - deliberate failing assertion. Do not merge into main.
+          - script: |
+              ansible localhost -m ansible.builtin.assert -a "that='1 == 2' fail_msg='DRILL: deliberate failing assertion for pipeline triage exercise'"
+            displayName: DRILL - Deliberate failing assertion
+            workingDirectory: $(ansibleDir)
           - script: |
               set -e
               for key in app_public_ip backend_private_ip mysql_fqdn; do
