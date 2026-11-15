@@ -1,0 +1,13 @@
+---
+# Handoff from the Infrastructure Pipeline (non-sensitive values only)
+
+# Nginx on the frontend reaches EpicBook through the backend PRIVATE IP,
+# never through the backend's public management address.
+backend_private_ip: "10.20.2.4"
+backend_app_port: 8080
+
+# Azure Database for MySQL (private access only)
+mysql_fqdn: "epicbook-mysql-x6x1b.mysql.database.azure.com"
+
+# The MySQL username and password are NOT stored here.
+# They come from the Azure DevOps secret variable group at runtime.
